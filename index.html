@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Hero Dash</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T6c99+7fWNgYIeGz0cUhO2JQ+TwoGzSb9boCBxNpvoJvNK0Cpn83rs+MwNl867G0Iwg" crossorigin="anonymous">
+    <style>
+        body {
+            background-color: #f0f0f0;
+            overflow: hidden;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #hero {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background-color: blue;
+            border-radius: 50%;
+            bottom: 50px;
+            left: 50px;
+        }
+
+        #obstacle {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background-color: red;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="hero"></div>
+    </div>
+
+    <script>
+        const gameContainer = document.getElementById('game-container');
+        const hero = document.getElementById('hero');
+        let heroX = 50;
+        let heroY = 50;
+        let obstacleX = Math.floor(Math.random() * (window.innerWidth - 50));
+        let obstacleY = 0;
+        let gameInterval;
+        let score = 0;
+
+        function startGame() {
+            gameInterval = setInterval(gameLoop, 20);
+        }
+
+        function gameLoop() {
+            moveObstacle();
+            checkCollision();
+            updateScore();
+            render();
+        }
+
+        function moveObstacle() {
+            obstacleY += 5;
+            if (obstacleY > window.innerHeight) {
+                obstacleX = Math.floor(Math.random() * (window.innerWidth - 50));
+                obstacleY = 0;
+            }
+            obstacle.style.left = obstacleX + 'px';
+            obstacle.style.top = obstacleY + 'px';
+        }
+
+        function checkCollision() {
+            if (
+                heroX + 50 > obstacleX &&
+                heroX < obstacleX + 50 &&
+                heroY + 50 > obstacleY &&
+                heroY < obstacleY + 50
+            ) {
+                clearInterval(gameInterval);
+                alert(`Game Over! Your Score: ${score}`);
+            }
+        }
+
+        function updateScore() {
+            score++;
+        }
+
+        function render() {
+            hero.style.left = heroX + 'px';
+            hero.style.top = heroY + 'px';
+        }
+
+        document.addEventListener('keydown', (event) => {
+            switch (event.key) {
+                case 'ArrowLeft':
+                    heroX -= 10;
+                    if (heroX < 0) {
+                        heroX = 0;
+                    }
+                    break;
+                case 'ArrowRight':
+                    heroX += 10;
+                    if (heroX > window.innerWidth - 50) {
+                        heroX = window.innerWidth - 50;
+                    }
+                    break;
+            }
+        });
+
+        const obstacle = document.createElement('div');
+        obstacle.id = 'obstacle';
+        gameContainer.appendChild(obstacle);
+
+        startGame();
+    </script>
+
+</body>
+</html>
