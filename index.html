@@ -51,6 +51,11 @@
         let gameInterval;
         let score = 0;
 
+        // Create obstacle element
+        const obstacle = document.createElement('div');
+        obstacle.id = 'obstacle';
+        gameContainer.appendChild(obstacle);
+
         function startGame() {
             gameInterval = setInterval(gameLoop, 20);
         }
@@ -109,10 +114,6 @@
                     break;
             }
         });
-
-        const obstacle = document.createElement('div');
-        obstacle.id = 'obstacle';
-        gameContainer.appendChild(obstacle);
 
         startGame();
     </script>
