@@ -1,148 +1,331 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
+    <title>Dodge Game 2.1</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Endless Runner Game</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T6c99+7fWNgYIeGz0cUhO2JQ+TwoGzSb9boCBxNpvoJvNK0Cpn83rs+MwNl867G0Iwg" crossorigin="anonymous">
     <style>
+        canvas {
+            border: 1px solid black;
+            touch-action: none;
+        }
         body {
-            background-color: #f0f0f0;
-            overflow: hidden;
             margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+            position: relative;
         }
-        #gameCanvas {
-            display: block;
-            background-color: #87CEEB;
-            margin: 0 auto;
-        }
-        #score {
+        #controls {
             position: absolute;
             top: 10px;
-            left: 10px;
-            font-size: 24px;
-            font-weight: bold;
-            color: #fff;
+            right: 10px;
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            padding: 8px 16px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
         }
     </style>
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>
-    <div id="score">Score: 0</div>
+    <div id="controls">
+        <button id="restartBtn" style="display: none;">Restart</button>
+        <button id="pauseBtn">Pause</button>
+    </div>
 
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        const scoreDisplay = document.getElementById('score');
+        const restartBtn = document.getElementById('restartBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
 
         // Set canvas size
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+        canvas.width = 300;
+        canvas.height = 500;
 
         // Game variables
-        let score = 0;
-        let gameOver = false;
-
-        // Player object
-        const player = {
-            x: canvas.width / 2,
-            y: canvas.height - 60,
-            width: 50,
-            height: 50,
+        let player = {
+            x: canvas.width/2 - 15,
+            y: canvas.height - 30,
+            size: 30,
             speed: 5,
-            dx: 0,
-            dy: 0
+            invincible: false,
+            fireCooldown: 0
         };
 
-        // Obstacle array
-        const obstacles = [];
+        let obstacles = [];
+        let bullets = [];
+        let powerUps = [];
+        let score = 0;
+        let gameLoop;
+        let isPaused = false;
+        let isGameOver = false;
+        let gameSpeed = 1;
 
-        // Event listeners for player movement
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'ArrowLeft') {
-                player.dx = -player.speed;
-            } else if (e.key === 'ArrowRight') {
-                player.dx = player.speed;
-            } else if (e.key === 'ArrowUp') {
-                player.dy = -player.speed;
-            } else if (e.key === 'ArrowDown') {
-                player.dy = player.speed;
+        // Touch controls
+        let touchX = null;
+
+        // Event Listeners
+        canvas.addEventListener('touchstart', (e) => {
+            touchX = e.touches[0].clientX;
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if(touchX !== null) {
+                const newX = e.touches[0].clientX;
+                const diff = newX - touchX;
+                player.x = Math.max(0, Math.min(canvas.width - player.size, player.x + diff));
+                touchX = newX;
             }
         });
 
-        document.addEventListener('keyup', () => {
-            player.dx = 0;
-            player.dy = 0;
+        canvas.addEventListener('touchend', () => {
+            touchX = null;
         });
 
-        // Function to create obstacles
+        restartBtn.addEventListener('click', restartGame);
+        pauseBtn.addEventListener('click', togglePause);
+
         function createObstacle() {
-            const width = Math.random() * (canvas.width / 5) + 30;
-            const x = Math.random() * (canvas.width - width);
-            const y = -50;
-            const speed = Math.random() * 2 + 2;
-            obstacles.push({ x, y, width, height: 50, speed });
+            obstacles.push({
+                x: Math.random() * (canvas.width - 40) + 20,
+                y: 0,
+                radius: 12,
+                speed: 3,
+                health: 3
+            });
         }
 
-        // Function to update game elements
-        function update() {
-            if (gameOver) return;
-
-            // Move player
-            player.x += player.dx;
-            player.y += player.dy;
-
-            // Prevent player from going out of bounds
-            if (player.x < 0) player.x = 0;
-            if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
-            if (player.y < 0) player.y = 0;
-            if (player.y + player.height > canvas.height) player.y = canvas.height - player.height;
-
-            // Update obstacles
-            for (let i = 0; i < obstacles.length; i++) {
-                const obs = obstacles[i];
-                obs.y += obs.speed;
-
-                // Check for collision
-                if (
-                    player.x < obs.x + obs.width &&
-                    player.x + player.width > obs.x &&
-                    player.y < obs.y + obs.height &&
-                    player.y + player.height > obs.y
-                ) {
-                    gameOver = true;
-                    alert(`Game Over! Your Score: ${score}`);
-                    return;
-                }
-
-                // Remove off-screen obstacles
-                if (obs.y > canvas.height) {
-                    obstacles.splice(i, 1);
-                    score++;
-                    scoreDisplay.textContent = `Score: ${score}`;
-                }
+        function shoot() {
+            if (player.fireCooldown <= 0) {
+                bullets.push({
+                    x: player.x + player.size/2,
+                    y: player.y,
+                    radius: 4,
+                    speed: 9
+                });
+                player.fireCooldown = 10;
             }
+        }
 
-            // Clear canvas
+        function createPowerUp(x, y) {
+            const types = ['rapid', 'shield', 'slow'];
+            const type = types[Math.floor(Math.random() * types.length)];
+            powerUps.push({
+                x: x,
+                y: y,
+                radius: 10,
+                type: type,
+                speed: 2
+            });
+        }
+
+        function drawPlayer() {
+            ctx.fillStyle = player.invincible ? '#00ffff' : '#3498db';
+            ctx.fillRect(player.x, player.y, player.size, player.size);
+        }
+
+        function drawObstacles() {
+            ctx.fillStyle = '#e74c3c';
+            obstacles.forEach(obstacle => {
+                ctx.beginPath();
+                ctx.arc(obstacle.x, obstacle.y, obstacle.radius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Health bar
+                const healthBarWidth = 20;
+                const healthBarHeight = 4;
+                const healthBarX = obstacle.x - healthBarWidth/2;
+                const healthBarY = obstacle.y - obstacle.radius - 8;
+                ctx.fillStyle = '#ff0000';
+                ctx.fillRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
+                ctx.fillStyle = '#00ff00';
+                const currentHealthWidth = (obstacle.health / 3) * healthBarWidth;
+                ctx.fillRect(healthBarX, healthBarY, currentHealthWidth, healthBarHeight);
+            });
+        }
+
+        function drawBullets() {
+            ctx.fillStyle = '#2c3e50';
+            bullets.forEach(bullet => {
+                ctx.beginPath();
+                ctx.arc(bullet.x, bullet.y, bullet.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        function drawPowerUps() {
+            powerUps.forEach(powerUp => {
+                ctx.fillStyle = {
+                    'rapid': '#00ff00',
+                    'shield': '#0000ff',
+                    'slow': '#ffff00'
+                }[powerUp.type];
+                ctx.beginPath();
+                ctx.arc(powerUp.x, powerUp.y, powerUp.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        function update() {
+            if(isPaused || isGameOver) return;
+
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Draw player
-            ctx.fillStyle = '#FF6347';
-            ctx.fillRect(player.x, player.y, player.width, player.height);
+            if(player.fireCooldown > 0) player.fireCooldown--;
+            shoot();
 
-            // Draw obstacles
-            ctx.fillStyle = '#228B22';
-            for (const obs of obstacles) {
-                ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+            // Update bullets and check collisions
+            for (let bulletIndex = bullets.length - 1; bulletIndex >= 0; bulletIndex--) {
+                const bullet = bullets[bulletIndex];
+                bullet.y -= bullet.speed;
+
+                for (let obstacleIndex = obstacles.length - 1; obstacleIndex >= 0; obstacleIndex--) {
+                    const obstacle = obstacles[obstacleIndex];
+                    const dx = bullet.x - obstacle.x;
+                    const dy = bullet.y - obstacle.y;
+                    const distance = Math.sqrt(dx*dx + dy*dy);
+                    
+                    if(distance < bullet.radius + obstacle.radius) {
+                        bullets.splice(bulletIndex, 1);
+                        obstacle.health -= 1;
+                        if(obstacle.health <= 0) {
+                            obstacles.splice(obstacleIndex, 1);
+                            if(Math.random() < 0.3) createPowerUp(obstacle.x, obstacle.y);
+                            score += 20; // Only score when destroying obstacles
+                        }
+                        break;
+                    }
+                }
             }
 
-            // Request next frame
-            requestAnimationFrame(update);
+            // Update obstacles
+            obstacles.forEach(obstacle => {
+                obstacle.y += obstacle.speed * gameSpeed;
+
+                // Player collision check
+                if(!player.invincible) {
+                    const closestX = Math.max(player.x, Math.min(obstacle.x, player.x + player.size));
+                    const closestY = Math.max(player.y, Math.min(obstacle.y, player.y + player.size));
+                    const dx = obstacle.x - closestX;
+                    const dy = obstacle.y - closestY;
+                    const distance = Math.sqrt(dx*dx + dy*dy);
+                    
+                    if(distance < obstacle.radius) {
+                        gameOver();
+                        return;
+                    }
+                }
+            });
+
+            // Update power-ups
+            powerUps.forEach((powerUp, index) => {
+                powerUp.y += powerUp.speed * gameSpeed;
+
+                // Power-up collection
+                const closestX = Math.max(player.x, Math.min(powerUp.x, player.x + player.size));
+                const closestY = Math.max(player.y, Math.min(powerUp.y, player.y + player.size));
+                const dx = powerUp.x - closestX;
+                const dy = powerUp.y - closestY;
+                const distance = Math.sqrt(dx*dx + dy*dy);
+
+                if(distance < powerUp.radius) {
+                    applyPowerUp(powerUp.type);
+                    powerUps.splice(index, 1);
+                }
+            });
+
+            // Clean up off-screen objects
+            obstacles = obstacles.filter(obstacle => obstacle.y < canvas.height);
+            powerUps = powerUps.filter(powerUp => powerUp.y < canvas.height);
+
+            // Spawn new obstacles
+            if(Math.random() < 0.02) createObstacle();
+
+            // Draw UI
+            ctx.fillStyle = 'black';
+            ctx.font = '20px Arial';
+            ctx.fillText(`Score: ${score}`, 10, 30); // Direct score display
+
+            // Draw game elements
+            drawPlayer();
+            drawObstacles();
+            drawBullets();
+            drawPowerUps();
         }
 
-        // Start game loop
-        setInterval(createObstacle, 2000);
-        update();
+        function applyPowerUp(type) {
+            switch(type) {
+                case 'rapid':
+                    player.fireCooldown = 5;
+                    setTimeout(() => player.fireCooldown = 10, 5000);
+                    break;
+                case 'shield':
+                    player.invincible = true;
+                    setTimeout(() => player.invincible = false, 3000);
+                    break;
+                case 'slow':
+                    gameSpeed = 0.5;
+                    setTimeout(() => gameSpeed = 1, 5000);
+                    break;
+            }
+        }
+
+        function gameOver() {
+            isGameOver = true;
+            clearInterval(gameLoop);
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'white';
+            ctx.font = '30px Arial';
+            ctx.fillText('Game Over!', canvas.width/2 - 80, canvas.height/2);
+            ctx.fillText(`Final Score: ${score}`, canvas.width/2 - 90, canvas.height/2 + 40);
+            restartBtn.style.display = 'block';
+            pauseBtn.style.display = 'none';
+        }
+
+        function restartGame() {
+            player = {
+                x: canvas.width/2 - 15,
+                y: canvas.height - 30,
+                size: 30,
+                speed: 5,
+                invincible: false,
+                fireCooldown: 0
+            };
+            obstacles = [];
+            bullets = [];
+            powerUps = [];
+            score = 0;
+            gameSpeed = 1;
+            isGameOver = false;
+            restartBtn.style.display = 'none';
+            pauseBtn.style.display = 'block';
+            isPaused = false;
+            pauseBtn.textContent = 'Pause';
+            clearInterval(gameLoop);
+            gameLoop = setInterval(update, 1000/60);
+        }
+
+        function togglePause() {
+            isPaused = !isPaused;
+            pauseBtn.textContent = isPaused ? 'Continue' : 'Pause';
+            if(!isPaused) gameLoop = setInterval(update, 1000/60);
+            else clearInterval(gameLoop);
+        }
+
+        // Start game
+        gameLoop = setInterval(update, 1000/60);
     </script>
 </body>
 </html>
